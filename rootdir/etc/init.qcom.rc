@@ -23,12 +23,6 @@ on fs
     mkdir /tombstones/wcnss 0771 system system
     mkdir /tombstones/dsps 0771 system system
 
-    # link firmware
-    exec /system/bin/sh /system/etc/init.qcom.radio_links.sh
-    exec /system/bin/sh /system/etc/init.qcom.q6_links.sh
-
-    mount_all /remount.qcom
-
 on post-fs-data
     # double check perms and set owner
     chown root root /devlog
@@ -96,7 +90,7 @@ on boot
     mkdir /data/misc/wifi/hostapd 0770 wifi wifi
     mkdir /data/misc/wifi/wpa_supplicant 0770 wifi wifi
     mkdir /data/misc/dhcp 0770 dhcp dhcp
-    chown dhcp dhcp /data/misc/dhcp
+    chown dhcp system /data/misc/dhcp
 
     # for ST R3GD20
     chown system system /sys/class/htc_gyro/gyro/enable_device
@@ -191,15 +185,15 @@ on boot
 service abld /system/bin/mm-abl-daemon
     disabled
 
-service dhcpcd_bt-pan /system/bin/dhcpcd -ABKL
+service dhcpcd_bt-pan /system/bin/dhcpcd -BKLG
     disabled
     oneshot
 
-service dhcpcd_p2p /system/bin/dhcpcd -aABKL
+service dhcpcd_p2p /system/bin/dhcpcd -ABKL
     disabled
     oneshot
 
-service dhcpcd_wlan0 /system/bin/dhcpcd -ABKLG
+service dhcpcd_wlan0 /system/bin/dhcpcd -ABDKL
     disabled
     oneshot
 
@@ -219,6 +213,10 @@ service iprenew_bt-pan /system/bin/dhcpcd -n
     disabled
     oneshot
 
+service iprenew_p2p /system/bin/dhcpcd -n
+    disabled
+    oneshot
+
 service iprenew_wlan0 /system/bin/dhcpcd -n
     disabled
     oneshot
@@ -232,6 +230,7 @@ service netmgrd /system/bin/netmgrd
 
 service p2p_supplicant /system/bin/wpa_supplicant \
     -iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf \
+    -I/system/etc/wifi/p2p_supplicant_overlay.conf \
     -O/data/misc/wifi/sockets -N \
     -ip2p0 -Dnl80211 -c/data/misc/wifi/p2p_supplicant.conf \
     -puse_p2p_group_interface=1 -e/data/misc/wifi/entropy.bin \
@@ -245,11 +244,6 @@ service qcamerasvr /system/bin/mm-qcamera-daemon
     class main
     user system
     group system camera inet
-
-service qcom-post-boot /system/bin/sh /system/etc/init.qcom.post_boot.sh
-    user root
-    disabled
-    oneshot
 
 service qcom-sh /system/bin/sh /init.qcom.sh
     class main
@@ -278,6 +272,7 @@ service time_daemon /system/bin/time_daemon
 
 service wpa_supplicant /system/bin/wpa_supplicant \
     -iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf \
+    -I/system/etc/wifi/wpa_supplicant_overlay.conf \
     -O/data/misc/wifi/sockets \
     -e/data/misc/wifi/entropy.bin -g@android:wpa_wlan0
     class main
@@ -305,7 +300,7 @@ on property:init.svc.bootanim=stopped
     start qcom-post-boot
 
 on property:init.svc.wpa_supplicant=stopped
-    stop dhcpcd_wlan0
+    stop dhcpcd
 
 on property:persist.thermal.monitor=true
     start thermald
@@ -326,3 +321,150 @@ on property:service.adb.root=1
     write /sys/class/android_usb/android0/enable 0
     restart adbd
     write /sys/class/android_usb/android0/enable 1
+
+on property:sys.boot_completed=1
+    # Set up power modes
+    write /sys/module/rpm_resources/enable_low_power/L2_cache 1
+    write /sys/module/rpm_resources/enable_low_power/pxo 1
+    write /sys/module/rpm_resources/enable_low_power/vdd_dig 1
+    write /sys/module/rpm_resources/enable_low_power/vdd_mem 1
+    write /sys/module/pm_8x60/modes/cpu0/retention/idle_enabled 1
+    write /sys/module/pm_8x60/modes/cpu1/retention/idle_enabled 1
+    write /sys/module/pm_8x60/modes/cpu2/retention/idle_enabled 1
+    write /sys/module/pm_8x60/modes/cpu3/retention/idle_enabled 1
+    write /sys/module/pm_8x60/modes/cpu0/power_collapse/suspend_enabled 1
+    write /sys/module/pm_8x60/modes/cpu1/power_collapse/suspend_enabled 1
+    write /sys/module/pm_8x60/modes/cpu2/power_collapse/suspend_enabled 1
+    write /sys/module/pm_8x60/modes/cpu3/power_collapse/suspend_enabled 1
+    write /sys/module/pm_8x60/modes/cpu0/standalone_power_collapse/suspend_enabled 1
+    write /sys/module/pm_8x60/modes/cpu1/standalone_power_collapse/suspend_enabled 1
+    write /sys/module/pm_8x60/modes/cpu2/standalone_power_collapse/suspend_enabled 1
+    write /sys/module/pm_8x60/modes/cpu3/standalone_power_collapse/suspend_enabled 1
+    write /sys/module/pm_8x60/modes/cpu0/standalone_power_collapse/idle_enabled 1
+    write /sys/module/pm_8x60/modes/cpu1/standalone_power_collapse/idle_enabled 1
+    write /sys/module/pm_8x60/modes/cpu2/standalone_power_collapse/idle_enabled 1
+    write /sys/module/pm_8x60/modes/cpu3/standalone_power_collapse/idle_enabled 1
+    write /sys/module/pm_8x60/modes/cpu0/power_collapse/idle_enabled 1
+    write /sys/module/msm_thermal/core_control/enabled 0
+    write /sys/devices/system/cpu/cpu1/online 1
+    write /sys/devices/system/cpu/cpu2/online 1
+    write /sys/devices/system/cpu/cpu3/online 1
+    chown -h system /sys/devices/system/cpu/cpufreq/ondemand/sampling_rate
+    chown -h system /sys/devices/system/cpu/cpufreq/ondemand/sampling_down_factor
+    chown -h system /sys/devices/system/cpu/cpufreq/ondemand/io_is_busy
+    write /sys/module/cpu_boost/parameters/boost_ms 20
+    write /sys/module/cpu_boost/parameters/sync_threshold 1242000
+    write /sys/module/cpu_boost/parameters/input_boost_freq 1134000
+    write /sys/module/cpu_boost/parameters/input_boost_ms 40
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq 384000
+    write /sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq 384000
+    write /sys/devices/system/cpu/cpu2/cpufreq/scaling_min_freq 384000
+    write /sys/devices/system/cpu/cpu3/cpufreq/scaling_min_freq 384000
+    chown -h system /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
+    chown -h system /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
+    chown -h system /sys/devices/system/cpu/cpu1/cpufreq/scaling_max_freq
+    chown -h system /sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq
+    chown -h system /sys/devices/system/cpu/cpu2/cpufreq/scaling_max_freq
+    chown -h system /sys/devices/system/cpu/cpu2/cpufreq/scaling_min_freq
+    chown -h system /sys/devices/system/cpu/cpu3/cpufreq/scaling_max_freq
+    chown -h system /sys/devices/system/cpu/cpu3/cpufreq/scaling_min_freq
+    write /sys/module/msm_thermal/core_control/enabled 1
+    write /dev/cpuctl/apps/cpu.notify_on_migrate 1
+    chown -h root.system /sys/devices/system/cpu/mfreq
+    chmod -h 220 /sys/devices/system/cpu/mfreq
+    chown -h root.system /sys/devices/system/cpu/cpu1/online
+    chown -h root.system /sys/devices/system/cpu/cpu2/online
+    chown -h root.system /sys/devices/system/cpu/cpu3/online
+    chmod -h 664 /sys/devices/system/cpu/cpu1/online
+    chmod -h 664 /sys/devices/system/cpu/cpu2/online
+    chmod -h 664 /sys/devices/system/cpu/cpu3/online
+    # Set DCVS parameters for CPU
+    write /sys/module/msm_dcvs/cores/cpu0/slack_time_max_us 40000
+    write /sys/module/msm_dcvs/cores/cpu0/slack_time_min_us 40000
+    write /sys/module/msm_dcvs/cores/cpu0/em_win_size_min_us 100000
+    write /sys/module/msm_dcvs/cores/cpu0/em_win_size_max_us 500000
+    write /sys/module/msm_dcvs/cores/cpu0/slack_mode_dynamic 0
+    write /sys/module/msm_dcvs/cores/cpu0/disable_pc_threshold 1000000
+    write /sys/module/msm_dcvs/cores/cpu1/slack_time_max_us 25000
+    write /sys/module/msm_dcvs/cores/cpu1/slack_time_min_us 25000
+    write /sys/module/msm_dcvs/cores/cpu1/em_win_size_min_us 100000
+    write /sys/module/msm_dcvs/cores/cpu1/em_win_size_max_us 500000
+    write /sys/module/msm_dcvs/cores/cpu1/slack_mode_dynamic 0
+    write /sys/module/msm_dcvs/cores/cpu1/disable_pc_threshold 1000000
+    write /sys/module/msm_dcvs/cores/cpu2/slack_time_max_us 25000
+    write /sys/module/msm_dcvs/cores/cpu2/slack_time_min_us 25000
+    write /sys/module/msm_dcvs/cores/cpu2/em_win_size_min_us 100000
+    write /sys/module/msm_dcvs/cores/cpu2/em_win_size_max_us 500000
+    write /sys/module/msm_dcvs/cores/cpu2/slack_mode_dynamic 0
+    write /sys/module/msm_dcvs/cores/cpu2/disable_pc_threshold 1000000
+    write /sys/module/msm_dcvs/cores/cpu3/slack_time_max_us 25000
+    write /sys/module/msm_dcvs/cores/cpu3/slack_time_min_us 25000
+    write /sys/module/msm_dcvs/cores/cpu3/em_win_size_min_us 100000
+    write /sys/module/msm_dcvs/cores/cpu3/em_win_size_max_us 500000
+    write /sys/module/msm_dcvs/cores/cpu3/slack_mode_dynamic 0
+    write /sys/module/msm_dcvs/cores/cpu3/disable_pc_threshold 1000000
+    # Set DCVS parameters for GPU
+    write /sys/module/msm_dcvs/cores/gpu0/slack_time_max_us 20000
+    write /sys/module/msm_dcvs/cores/gpu0/slack_time_min_us 20000
+    write /sys/module/msm_dcvs/cores/gpu0/slack_mode_dynamic 0
+    # Set msm_mpdecision parameters
+    write /sys/module/msm_mpdecision/slack_time_max_us 45000
+    write /sys/module/msm_mpdecision/slack_time_min_us 15000
+    write /sys/module/msm_mpdecision/em_win_size_min_us 100000
+    write /sys/module/msm_mpdecision/em_win_size_max_us 1000000
+    write /sys/module/msm_mpdecision/online_util_pct_min 3
+    write /sys/module/msm_mpdecision/online_util_pct_max 25
+    write /sys/module/msm_mpdecision/em_max_util_pct 97
+    write /sys/module/msm_mpdecision/rq_avg_poll_ms 2
+    write /sys/module/msm_mpdecision/mp_em_rounding_point_min 10
+    write /sys/module/msm_mpdecision/mp_em_rounding_point_max 85
+    write /sys/module/msm_mpdecision/iowait_threshold_pct 50
+    # Set permissions for the nodes needed by display on/off hook
+    chown -h system /sys/module/msm_dcvs/cores/cpu0/slack_time_max_us
+    chown -h system /sys/module/msm_dcvs/cores/cpu0/slack_time_min_us
+    chown -h system /sys/module/msm_mpdecision/slack_time_max_us
+    chown -h system /sys/module/msm_mpdecision/slack_time_min_us
+    chmod -h 664 /sys/module/msm_dcvs/cores/cpu0/slack_time_max_us
+    chmod -h 664 /sys/module/msm_dcvs/cores/cpu0/slack_time_min_us
+    chmod -h 664 /sys/module/msm_mpdecision/slack_time_max_us
+    chmod -h 664 /sys/module/msm_mpdecision/slack_time_min_us
+    # Wake on volume
+    write /sys/keyboard/vol_wakeup 1
+    # Set performance profile
+    setprop sys.perf.profile 1
+    start thermald
+
+# CM Performance Profiles
+
+# Powersave
+on property:sys.perf.profile=0
+    start mpdecision
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor "conservative"
+    write /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor "conservative"
+    write /sys/class/kgsl/kgsl-3d0/pwrscale/trustzone/governor "ondemand"
+
+# Balanced
+on property:sys.perf.profile=1
+    start mpdecision
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor "ondemand"
+    write /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor "ondemand"
+    write /sys/devices/system/cpu/cpufreq/ondemand/sampling_rate 50000
+    write /sys/devices/system/cpu/cpufreq/ondemand/up_threshold 90
+    write /sys/devices/system/cpu/cpufreq/ondemand/io_is_busy 1
+    write /sys/devices/system/cpu/cpufreq/ondemand/sampling_down_factor 4
+    write /sys/devices/system/cpu/cpufreq/ondemand/down_differential 10
+    write /sys/devices/system/cpu/cpufreq/ondemand/up_threshold_multi_core 70
+    write /sys/devices/system/cpu/cpufreq/ondemand/down_differential_multi_core 3
+    write /sys/devices/system/cpu/cpufreq/ondemand/optimal_freq 918000
+    write /sys/devices/system/cpu/cpufreq/ondemand/sync_freq 1026000
+    write /sys/devices/system/cpu/cpufreq/ondemand/up_threshold_any_cpu_load 80
+    write /sys/class/kgsl/kgsl-3d0/pwrscale/trustzone/governor "ondemand"
+
+# High performance
+on property:sys.perf.profile=2
+    stop mpdecision
+    write /sys/devices/system/cpu/cpu0/online 1
+    write /sys/devices/system/cpu/cpu1/online 1
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor "performance"
+    write /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor "performance"
+    write /sys/class/kgsl/kgsl-3d0/pwrscale/trustzone/governor "performance"

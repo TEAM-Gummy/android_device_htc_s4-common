@@ -70,6 +70,7 @@ etc/firmware/leia_pm4_470.fw
 etc/firmware/vidc_1080p.fw
 
 # Media libraries
+lib/libExtendedExtractor.so
 lib/libI420colorconvert.so
 lib/libmm-color-convertor.so
 
@@ -82,7 +83,6 @@ vendor/lib/libWVStreamControlAPI_L3.so
 
 # WLAN
 etc/firmware/wlan/prima/WCNSS_cfg.dat
-etc/firmware/wlan/prima/WCNSS_qcom_cfg.ini
 etc/firmware/wlan/prima/WCNSS_qcom_wlan_nv.bin
 etc/firmware/wcnss.b00
 etc/firmware/wcnss.b01
